@@ -5,35 +5,6 @@ add_executable(openpico64
     utils.c
 )
 
-if(NOT DEFINED REGION)
-    message(FATAL_ERROR "Please set the variable REGION to either NTSC or PAL")
-endif()
-
-if(REGION STREQUAL "NTSC")
-    set(CONFIG_REGION_NTSC 1)
-    set(CONFIG_REGION_PAL 0)
-elseif(REGION STREQUAL "PAL")
-    set(CONFIG_REGION_NTSC 0)
-    set(CONFIG_REGION_PAL 1)
-else()
-    message(FATAL_ERROR "Please set the variable REGION to either NTSC or PAL")
-endif()
-
-if(NOT DEFINED CPU_FREQ_MHZ)
-    message("CPU_FREQ_MHZ: Using default overclocked CPU Frequency of 266 MHz")
-    set(CONFIG_CPU_FREQ_MHZ 266)
-else()
-    message("CPU_FREQ_MHZ: Using custom CPU Frequency of ${CPU_FREQ_MHZ} MHz")
-    set(CONFIG_CPU_FREQ_MHZ ${CPU_FREQ_MHZ})
-endif()
-if(NOT DEFINED ROM_HEADER_OVERRIDE)
-    message("ROM_HEADER_OVERRIDE: Disabled")
-    set(CONFIG_ROM_HEADER_OVERRIDE 0)
-else()
-    message("ROM_HEADER_OVERRIDE: Using custom header=${ROM_HEADER_OVERRIDE}")
-    set(CONFIG_ROM_HEADER_OVERRIDE ${ROM_HEADER_OVERRIDE})
-endif()
-
 if(NOT DEFINED FLASH_SIZE_MB)
     set(FLASH_SIZE_MB 2)
 endif()
@@ -54,10 +25,6 @@ target_link_options(openpico64 PRIVATE
 
 target_compile_definitions(openpico64 PRIVATE
     PICO_STDOUT_MUTEX=0
-    CONFIG_REGION_NTSC=${CONFIG_REGION_NTSC}
-    CONFIG_REGION_PAL=${CONFIG_REGION_PAL}
-    CONFIG_CPU_FREQ_MHZ=${CONFIG_CPU_FREQ_MHZ}
-    CONFIG_ROM_HEADER_OVERRIDE=${CONFIG_ROM_HEADER_OVERRIDE}
 )
 
 # Generate git_info.h
@@ -82,7 +49,6 @@ add_dependencies(openpico64 update_git_info)
 
 # pull in common dependencies
 target_link_libraries(openpico64
-    n64_cic
     n64_pi
     picocart64_shared
     pico_multicore

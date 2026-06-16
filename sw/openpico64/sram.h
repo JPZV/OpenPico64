@@ -31,6 +31,7 @@
  */
 
 extern uint16_t sram[SRAM_1MBIT_SIZE / sizeof(uint16_t)];
+extern uint8_t sram_counter;
 
 static inline uint32_t sram_resolve_address_shifted(uint32_t pi_address)
 {

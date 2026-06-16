@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2022 Konrad Beckmann
+ * Copyright (c) 2024 JPZV
  */
 
 #include <stdio.h>
@@ -15,35 +16,27 @@
 #include "hardware/flash.h"
 #include "hardware/irq.h"
 
-#if PICO_SDK_VERSION_MAJOR >= 2 || (PICO_SDK_VERSION_MAJOR == 1 && (PICO_SDK_VERSION_MINOR > 6 || PICO_SDK_VERSION_MINOR == 6 && PICO_SDK_VERSION_REVISION >= 2 ))
-/* https://github.com/raspberrypi/pico-sdk/issues/712 */
-#include "hardware/clocks.h"
-#endif
-
 #include "stdio_async_uart.h"
 
-#include "n64_cic.h"
 #include "git_info.h"
+#include "filesystem.h"
 #include "n64_pi_task.h"
 #include "openpico64_pins.h"
 #include "sram.h"
 #include "utils.h"
 
-#define UART_TX_PIN (28)
-#define UART_RX_PIN (29)		/* not available on the pico */
+#define UART_TX_PIN (25) /* On-Board LED */ // NOTE: Will not work becase PIO is between 4 and 26
+#define UART_RX_PIN (23) /* not available on the pico */
 #define UART_ID     uart0
 #define BAUD_RATE   115200
 
 #define ENABLE_N64_PI 1
 
 // Priority 0 = lowest, 3 = highest
-#define CIC_TASK_PRIORITY     (3UL)
-#define SECOND_TASK_PRIORITY  (1UL)
+#define SRAM_TASK_PRIORITY     (3UL)
 
-static StaticTask_t cic_task;
-static StaticTask_t second_task;
-static StackType_t cic_task_stack[4 * 1024 / sizeof(StackType_t)];
-static StackType_t second_task_stack[4 * 1024 / sizeof(StackType_t)];
+static StaticTask_t sram_task;
+static StackType_t sram_task_stack[4 * 1024 / sizeof(StackType_t)];
 
 uint32_t g_flash_jedec_id;
 
@@ -78,61 +71,36 @@ void vApplicationGetTimerTaskMemory(StaticTask_t ** ppxTimerTaskTCBBuffer, Stack
 	*pulTimerTaskStackSize = configTIMER_TASK_STACK_DEPTH;
 }
 
-void cic_task_entry(__unused void *params)
+void sram_task_entry(__unused void *params)
 {
-	printf("cic_task_entry\n");
+	printf("sram_task_entry\n");
 
 	// Load SRAM backup from external flash
 	// TODO: How do we detect if it's uninitialized (config area in flash?),
 	//       or maybe we don't have to care?
 	sram_load_from_flash();
 
-	n64_cic_hw_init();
-	// n64_cic_reset_parameters();
-	// n64_cic_set_parameters(params);
-	// n64_cic_set_dd_mode(false);
+	// Save SRAM backup to external flash
+	// We do it by checking the times it's used (either by READ or WRITE)
 
-	// TODO: Performing the write to flash in a separate task is the way to go
-	n64_cic_task(sram_save_to_flash);
-}
-
-#if 0
-static void second_task_entry(__unused void *params)
-{
-	uint32_t count = 0;
-
-	printf("second_task_entry\n");
-
-	while (true) {
-		vTaskDelay(1000);
-		count++;
-
-		// Set to 1 to print stack watermarks.
-		// Printing is synchronous and interferes with the CIC emulation.
-#if 0
-		// printf("Second task heartbeat: %d\n", count);
-		// vPortYield();
-
-		if (count > 10) {
-			printf("watermark: %d\n", uxTaskGetStackHighWaterMark(NULL));
-			vPortYield();
-
-			printf("watermark second_task: %d\n", uxTaskGetStackHighWaterMark((TaskHandle_t) & second_task));
-			vPortYield();
-
-			printf("watermark cic_task: %d\n", uxTaskGetStackHighWaterMark((TaskHandle_t) & cic_task));
-			vPortYield();
+	// We start the last counter by 255 in order to force a save to flash at the start
+	uint8_t last_sram_counter = sram_counter;
+	while (true)
+	{
+		if (last_sram_counter != sram_counter)
+		{
+			sram_save_to_flash();
+			last_sram_counter = sram_counter;
 		}
-#endif
-
+		vTaskDelay(100 / portTICK_PERIOD_MS);
 	}
+	
+	vTaskDelete(NULL);
 }
-#endif
 
 void vLaunch(void)
 {
-	xTaskCreateStatic(cic_task_entry, "CICThread", configMINIMAL_STACK_SIZE, NULL, CIC_TASK_PRIORITY, cic_task_stack, &cic_task);
-	// xTaskCreateStatic(second_task_entry, "SecondThread", configMINIMAL_STACK_SIZE, NULL, SECOND_TASK_PRIORITY, second_task_stack, &second_task);
+	xTaskCreateStatic(sram_task_entry, "sram_task", configMINIMAL_STACK_SIZE, NULL, SRAM_TASK_PRIORITY, sram_task_stack, &sram_task);
 
 	/* Start the tasks and timer running. */
 	vTaskStartScheduler();
@@ -161,13 +129,12 @@ int main(void)
 	// but since it's used with a 2x clock divider,
 	// 266 MHz is safe in this regard.
 
-	set_sys_clock_khz(CONFIG_CPU_FREQ_MHZ * 1000, true);
+	// set_sys_clock_khz(133000, true);
+	set_sys_clock_khz(266000, true);	// Required for SRAM @ 200ns
 
 	// Init GPIOs before starting the second core and FreeRTOS
 	for (int i = 0; i <= 27; i++) {
 		gpio_init(i);
-		gpio_set_dir(i, GPIO_IN);
-		gpio_set_pulls(i, false, false);
 	}
 
 	// Set up ROM mapping table
@@ -180,10 +147,7 @@ int main(void)
 		}
 	}
 
-	// Enable pull up on N64_CIC_DIO since there is no external one.
-	gpio_pull_up(N64_CIC_DIO);
-
-	// Init UART on pin 28/29
+	// Init UART on pin 25/23
 	stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
 	printf("OpenPico64 Boot (git rev %08x)\r\n", GIT_REV);
 	printf("  CPU_FREQ_MHZ=%d\n", CONFIG_CPU_FREQ_MHZ);
