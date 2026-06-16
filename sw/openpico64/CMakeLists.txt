@@ -1,4 +1,6 @@
 add_executable(openpico64
+    filesystem.c
+    hw_config.c
     n64_pi_task.c
     openpico64.c
     sram.c
@@ -56,6 +58,7 @@ target_link_libraries(openpico64
     stdio_async_uart
     hardware_flash
     FreeRTOS-Kernel-Static # FreeRTOS kernel, static allocations
+    FatFs_SPI # FatFs_SPI
 )
 
 # disable usb output (interrupt heavy)

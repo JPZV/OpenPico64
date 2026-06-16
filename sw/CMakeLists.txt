@@ -35,6 +35,10 @@ pico_sdk_init()
 
 # Include FreeRTOS integration
 add_subdirectory(lib/freertos-kernel/portable/ThirdParty/GCC/RP2040 FreeRTOS-Kernel)
+# Include SD SPI card integration.
+# If you wonder why I use this instead of the new no-OS-FatFS-SD-SDIO-SPI-RPi-Pico it's because I never managed
+# to build with it. I think it's because of its size. I hope it wont impact perfomance. -JPZV
+add_subdirectory(lib/sd-spi-rpi-pico/FatFs_SPI SD-SPI-Card)
 
 # Add shared code
 add_subdirectory(n64_pi)

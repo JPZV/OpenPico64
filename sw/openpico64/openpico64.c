@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2022 Konrad Beckmann
- * Copyright (c) 2024 JPZV
+ * Copyright (c) 2026 JPZV
  */
 
 #include <stdio.h>
@@ -135,6 +135,22 @@ int main(void)
 	// Init GPIOs before starting the second core and FreeRTOS
 	for (int i = 0; i <= 27; i++) {
 		gpio_init(i);
+		switch (i)
+		{
+			default:
+				gpio_set_dir(i, GPIO_IN);
+				gpio_set_pulls(i, false, false);
+				break;
+			case SD_MISO:
+			case SD_CLK:
+			case SD_MOSI:
+				gpio_set_function(i, GPIO_FUNC_SPI);
+				if (i == SD_MISO) 
+				{
+					gpio_set_pulls(i, true, false);
+				}
+				break;
+		}
 	}
 
 	// Set up ROM mapping table
@@ -149,9 +165,7 @@ int main(void)
 
 	// Init UART on pin 25/23
 	stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
-	printf("OpenPico64 Boot (git rev %08x)\r\n", GIT_REV);
-	printf("  CPU_FREQ_MHZ=%d\n", CONFIG_CPU_FREQ_MHZ);
-	printf("  ROM_HEADER_OVERRIDE=%08lX\n", CONFIG_ROM_HEADER_OVERRIDE);
+	printf("PicoCart64 Boot (git rev %08x)\r\n", GIT_REV);
 
 #if ENABLE_N64_PI
 	// Launch the N64 PI implementation in the second core
@@ -161,6 +175,9 @@ int main(void)
 	//       It seems this works around the issue as well.
 	multicore_launch_core1(n64_pi_run);
 #endif
+
+	// Start SD Card FileSystem
+	fs_init();
 
 	// Start FreeRTOS on Core0
 	vLaunch();

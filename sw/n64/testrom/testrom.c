@@ -3,15 +3,17 @@
  *
  * Copyright (c) 2022 Konrad Beckmann <konrad.beckmann@gmail.com>
  * Copyright (c) 2022 Christopher Bonhage <me@christopherbonhage.com>
+ * Copyright (c) 2026 JPZV
  *
  * Based on https://github.com/meeq/SaveTest-N64
  */
 
 #include <string.h>
-#include <stdint.h>
 #include <libdragon.h>
 
 #include "git_info.h"
+#include "shell.h"
+#include "testrom.h"
 
 // picocart64_shared
 #include "pc64_regs.h"
@@ -26,18 +28,12 @@ typedef struct PI_regs_s {
 } PI_regs_t;
 static volatile PI_regs_t *const PI_regs = (PI_regs_t *) 0xA4600000;
 
-// SRAM constants
-#define SRAM_256KBIT_SIZE         0x00008000
-#define SRAM_768KBIT_SIZE         0x00018000
-#define SRAM_1MBIT_SIZE           0x00020000
-#define SRAM_BANK_SIZE            SRAM_256KBIT_SIZE
-#define SRAM_256KBIT_BANKS        1
-#define SRAM_768KBIT_BANKS        3
-#define SRAM_1MBIT_BANKS          4
+// SD Card Test constants
+#define SD_TEST_PATH				"/New Path/My Folder/"
 
 static void verify_memory_range(uint32_t base, uint32_t offset, uint32_t len)
 {
-	uint32_t start = base | offset;
+	uint32_t start = base + offset;
 	uint32_t end = start + len - 1;
 
 	switch (base) {
@@ -96,13 +92,24 @@ static void verify_memory_range(uint32_t base, uint32_t offset, uint32_t len)
 		assert(end >= PC64_CIBASE_ADDRESS_START);
 		assert(end <= PC64_CIBASE_ADDRESS_END);
 		break;
+	
+	case SD_PATH_ADDR_START:
+	case SD_GAME_PATH_ADDR_START:
+	case SD_STATUS_ADDR_START:
+	case SD_DIR_LIST_LEN_ADDR_START:
+	case SD_DIR_LIST_ADDR_START:
+		assert(start >= SD_ADDR_START);
+		assert(start <= SD_ADDR_END);
+		assert(end >= SD_ADDR_START);
+		assert(end <= SD_ADDR_END);
+		break;
 
 	default:
 		assert(!"Unsupported base");
 	}
 }
 
-static void pi_read_raw(void *dest, uint32_t base, uint32_t offset, uint32_t len)
+void pi_read_raw(void *dest, uint32_t base, uint32_t offset, uint32_t len)
 {
 	assert(dest != NULL);
 	verify_memory_range(base, offset, len);
@@ -113,7 +120,7 @@ static void pi_read_raw(void *dest, uint32_t base, uint32_t offset, uint32_t len
 	MEMORY_BARRIER();
 	PI_regs->ram_address = UncachedAddr(dest);
 	MEMORY_BARRIER();
-	PI_regs->pi_address = offset | base;
+	PI_regs->pi_address = offset + base;
 	MEMORY_BARRIER();
 	PI_regs->write_length = len - 1;
 	MEMORY_BARRIER();
@@ -122,7 +129,7 @@ static void pi_read_raw(void *dest, uint32_t base, uint32_t offset, uint32_t len
 	dma_wait();
 }
 
-static void pi_write_raw(const void *src, uint32_t base, uint32_t offset, uint32_t len)
+void pi_write_raw(const void *src, uint32_t base, uint32_t offset, uint32_t len)
 {
 	assert(src != NULL);
 	verify_memory_range(base, offset, len);
@@ -133,7 +140,7 @@ static void pi_write_raw(const void *src, uint32_t base, uint32_t offset, uint32
 	MEMORY_BARRIER();
 	PI_regs->ram_address = UncachedAddr(src);
 	MEMORY_BARRIER();
-	PI_regs->pi_address = offset | base;
+	PI_regs->pi_address = offset + base;
 	MEMORY_BARRIER();
 	PI_regs->read_length = len - 1;
 	MEMORY_BARRIER();
@@ -153,6 +160,8 @@ static void pi_write_u32(const uint32_t value, uint32_t base, uint32_t offset)
 static uint8_t __attribute__((aligned(16))) facit_buf[SRAM_1MBIT_SIZE];
 static uint8_t __attribute__((aligned(16))) read_buf[SRAM_1MBIT_SIZE];
 static char __attribute__((aligned(16))) write_buf[0x1000];
+
+char __attribute__((aligned(16))) path_read_buf[SD_PATH_LENGTH];
 
 static void pc64_uart_write(const uint8_t * buf, uint32_t len)
 {
@@ -225,10 +234,10 @@ static void configure_sram(void)
 #else
 
 	// Fast SRAM access (matches default values from SDK)
-	IO_WRITE(PI_BSD_DOM2_LAT_REG, 0x05);
+	IO_WRITE(PI_BSD_DOM2_LAT_REG, 0x40);
 	IO_WRITE(PI_BSD_DOM2_PWD_REG, 0x0C);
-	IO_WRITE(PI_BSD_DOM2_PGS_REG, 0x0D);
-	IO_WRITE(PI_BSD_DOM2_RLS_REG, 0x02);
+	IO_WRITE(PI_BSD_DOM2_PGS_REG, 0x07);
+	IO_WRITE(PI_BSD_DOM2_RLS_REG, 0x03);
 
 	// LAT: 0x04 works when banked mode is disabled
 #endif
@@ -335,6 +344,28 @@ int main(void)
 
 	///////////////////////////////////////////////////////////////////////////
 
+	// Read Current FS Path
+	data_cache_hit_writeback_invalidate(path_read_buf, sizeof(path_read_buf));
+	pi_read_raw(path_read_buf, SD_PATH_ADDR_START, 0, sizeof(path_read_buf));
+	printf("[ -- ] Current Dir = '%s'.\n", path_read_buf);
+	
+	printf("[ -- ] Setting current Dir to '%s' (%d chars).\n", SD_TEST_PATH, strlen(SD_TEST_PATH));
+	change_dir(SD_TEST_PATH);
+
+	data_cache_hit_writeback_invalidate(path_read_buf, sizeof(path_read_buf));
+	pi_read_raw(path_read_buf, SD_PATH_ADDR_START, 0, sizeof(path_read_buf));
+	printf("[ -- ] Current Dir = '%s'.\n", path_read_buf);
+	if (strcmp(SD_TEST_PATH, path_read_buf) != 0) {
+		fail_count++;
+		printf("[FAIL] Current Dir wasn't changed correctly!.\n");
+
+		printf("       Error: Test '%s' != CWD '%s'.\n", SD_TEST_PATH, path_read_buf);
+	} else {
+		printf("[ OK ] Currect Dir was changed correctly!.\n");
+	}
+
+	///////////////////////////////////////////////////////////////////////////
+
 	// Stress test: Read pseudo-random numbers from PicoCart64 RAND address space
 	// Reset random seed
 	pi_write_u32(0, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_RAND_SEED);
@@ -388,36 +419,34 @@ int main(void)
 		printf("       PicoCart64 might stall now and require a power cycle.\n");
 	}
 
-	if (fail_count == 0) {
+	if (fail_count == 0)
+	{
 		printf("\n[ OK ] Test is finished. All tests passed.\n");
-	} else {
+	}
+	else
+	{
 		printf("\n[FAIL] Test is finished. %d tests failed.\n", fail_count);
 	}
 	printf("\n");
 
-	// Draw something that moves forever
-	int count = 0;
-	while (1) {
-		display_context_t disp = 0;
-		while (!(disp = display_lock())) ;
+	console_render();
 
-		const int width = 60;
-		const int height = 240;
-
-		count++;
-
-		int x = count % 256;
-		if (x < 128)
-			x = 255 - x;
-
-		if (fail_count > 0) {
-			graphics_draw_box(disp, 0, 0, width, height, graphics_make_color(x, 0, 0, 255));
-			graphics_draw_box(disp, 0, count % (height - 10), width, 10, graphics_make_color(127, 127, 127, 255));
-		} else {
-			graphics_draw_box(disp, 0, 0, width, height, graphics_make_color(0, x, 0, 255));
-			graphics_draw_box(disp, 0, count % 230, width, 10, graphics_make_color(127, 127, 127, 255));
+	if (fail_count > 0)
+	{
+		/* Start the shell if the user presses start */
+		printf("\n\nPress START to continue to the shell...\n");
+		controller_init();
+		while (1)
+		{	
+			controller_scan();
+			struct controller_data keys = get_keys_pressed();
+			if (keys.c[0].start)
+			{
+				printf("Start pressed.\n");
+				break;
+			}
 		}
-
-		display_show(disp);
 	}
+
+	start_shell();
 }

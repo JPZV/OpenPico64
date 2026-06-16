@@ -4,3 +4,6 @@
 [submodule "sw/n64/libdragon"]
 	path = sw/n64/libdragon
 	url = https://github.com/DragonMinded/libdragon
+[submodule "sw/lib/sd-spi-rpi-pico"]
+	path = sw/lib/sd-spi-rpi-pico
+	url = https://github.com/carlk3/no-OS-FatFS-SD-SPI-RPi-Pico
