@@ -1,3 +1,6 @@
 [submodule "sw/lib/freertos-kernel"]
 	path = sw/lib/freertos-kernel
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel
+[submodule "sw/n64/libdragon"]
+	path = sw/n64/libdragon
+	url = https://github.com/DragonMinded/libdragon
