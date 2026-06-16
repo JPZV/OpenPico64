@@ -38,7 +38,7 @@
 
 #include "n64_cic.h"
 #include "sram.h"
-#include "picocart64_pins.h"
+#include "openpico64_pins.h"
 
 typedef enum {
 	REGION_NTSC,

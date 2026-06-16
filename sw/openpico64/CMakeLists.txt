@@ -1,6 +1,6 @@
-add_executable(picocart64_v1
+add_executable(openpico64
     n64_pi_task.c
-    picocart64_v1.c
+    openpico64.c
     sram.c
     utils.c
 )
@@ -49,10 +49,10 @@ elseif(FLASH_SIZE_MB STREQUAL "16")
     set(N64_ROM_SIZE "16192k")
 endif()
 
-target_link_options(picocart64_v1 PRIVATE
+target_link_options(openpico64 PRIVATE
     "-Wl,--defsym=__N64_ROM_LENGTH__=${N64_ROM_SIZE}")
 
-target_compile_definitions(picocart64_v1 PRIVATE
+target_compile_definitions(openpico64 PRIVATE
     PICO_STDOUT_MUTEX=0
     CONFIG_REGION_NTSC=${CONFIG_REGION_NTSC}
     CONFIG_REGION_PAL=${CONFIG_REGION_PAL}
@@ -72,16 +72,16 @@ add_custom_command(OUTPUT ${GIT_INFO_H}
 )
 
 
-target_include_directories(picocart64_v1 PRIVATE
+target_include_directories(openpico64 PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/../generated
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-add_dependencies(picocart64_v1 update_git_info)
+add_dependencies(openpico64 update_git_info)
 
 # pull in common dependencies
-target_link_libraries(picocart64_v1
+target_link_libraries(openpico64
     n64_cic
     n64_pi
     picocart64_shared
@@ -93,14 +93,14 @@ target_link_libraries(picocart64_v1
 )
 
 # disable usb output (interrupt heavy)
-pico_enable_stdio_usb(picocart64_v1 0)
+pico_enable_stdio_usb(openpico64 0)
 
 # disable uart output
-pico_enable_stdio_uart(picocart64_v1 0)
+pico_enable_stdio_uart(openpico64 0)
 
 # use custom linker script
-pico_set_linker_script(picocart64_v1 ${CMAKE_CURRENT_LIST_DIR}/memmap_custom.ld)
+pico_set_linker_script(openpico64 ${CMAKE_CURRENT_LIST_DIR}/memmap_custom.ld)
 
 # create map/bin/hex/uf2 file etc.
-pico_add_extra_outputs(picocart64_v1)
+pico_add_extra_outputs(openpico64)
 

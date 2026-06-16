@@ -9,7 +9,7 @@ set(CMAKE_BUILD_TYPE RelWithDebInfo)
 # Pull in SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(picocart64 C CXX ASM)
+project(openpico64 C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -43,7 +43,7 @@ add_subdirectory(stdio_async_uart)
 add_subdirectory(picocart64_shared)
 
 # Add applications
-add_subdirectory(picocart64_v1)
+add_subdirectory(openpico64)
 
 add_compile_options(-Wall
         -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int

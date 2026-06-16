@@ -18,12 +18,12 @@
 #include "n64_pi.h"
 #include "pc64_rand.h"
 #include "pc64_regs.h"
-#include "picocart64_pins.h"
+#include "openpico64_pins.h"
 #include "ringbuf.h"
 #include "sram.h"
 #include "stdio_async_uart.h"
 #include "utils.h"
-#include "picocart64_v1.h"
+#include "openpico64.h"
 
 // The rom to load in normal .z64, big endian, format
 #include "rom_vars.h"

@@ -25,7 +25,7 @@
 #include "n64_cic.h"
 #include "git_info.h"
 #include "n64_pi_task.h"
-#include "picocart64_pins.h"
+#include "openpico64_pins.h"
 #include "sram.h"
 #include "utils.h"
 
@@ -185,7 +185,7 @@ int main(void)
 
 	// Init UART on pin 28/29
 	stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
-	printf("PicoCart64 Boot (git rev %08x)\r\n", GIT_REV);
+	printf("OpenPico64 Boot (git rev %08x)\r\n", GIT_REV);
 	printf("  CPU_FREQ_MHZ=%d\n", CONFIG_CPU_FREQ_MHZ);
 	printf("  ROM_HEADER_OVERRIDE=%08lX\n", CONFIG_ROM_HEADER_OVERRIDE);
 
